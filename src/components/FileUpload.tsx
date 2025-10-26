@@ -5,11 +5,11 @@ import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 
 interface FileUploadProps {
-  onFileSelect: (file: File) => void;
-  selectedFile: File | null;
+  onFilesSelect: (files: File[]) => void;
+  selectedFiles: File[];
 }
 
-export const FileUpload = ({ onFileSelect, selectedFile }: FileUploadProps) => {
+export const FileUpload = ({ onFilesSelect, selectedFiles }: FileUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const { toast } = useToast();
 
@@ -35,50 +35,67 @@ export const FileUpload = ({ onFileSelect, selectedFile }: FileUploadProps) => {
     e.stopPropagation();
     setIsDragging(false);
 
-    const files = e.dataTransfer.files;
-    if (files && files[0]) {
-      validateAndSelectFile(files[0]);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      validateAndSelectFiles(files);
     }
-  }, []);
+  }, [selectedFiles]);
 
-  const validateAndSelectFile = (file: File) => {
+  const validateAndSelectFiles = (files: File[]) => {
     const maxSize = 20 * 1024 * 1024; // 20MB
+    const maxFiles = 10;
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'text/plain'];
 
-    if (!allowedTypes.includes(file.type)) {
+    if (selectedFiles.length + files.length > maxFiles) {
       toast({
-        title: "Invalid file type",
-        description: "Please upload a PDF, image (JPG/PNG), or text file.",
+        title: "Too many files",
+        description: `You can upload a maximum of ${maxFiles} files.`,
         variant: "destructive",
       });
       return;
     }
 
-    if (file.size > maxSize) {
-      toast({
-        title: "File too large",
-        description: "Please upload a file smaller than 20MB.",
-        variant: "destructive",
-      });
-      return;
+    const validFiles: File[] = [];
+    for (const file of files) {
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          title: "Invalid file type",
+          description: `${file.name}: Please upload PDF, image (JPG/PNG), or text files only.`,
+          variant: "destructive",
+        });
+        continue;
+      }
+
+      if (file.size > maxSize) {
+        toast({
+          title: "File too large",
+          description: `${file.name} is larger than 20MB.`,
+          variant: "destructive",
+        });
+        continue;
+      }
+
+      validFiles.push(file);
     }
 
-    onFileSelect(file);
-    toast({
-      title: "File uploaded",
-      description: `${file.name} has been selected successfully.`,
-    });
+    if (validFiles.length > 0) {
+      onFilesSelect([...selectedFiles, ...validFiles]);
+      toast({
+        title: "Files uploaded",
+        description: `${validFiles.length} file(s) added successfully.`,
+      });
+    }
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (files && files[0]) {
-      validateAndSelectFile(files[0]);
+    if (files && files.length > 0) {
+      validateAndSelectFiles(Array.from(files));
     }
   };
 
-  const clearFile = () => {
-    onFileSelect(null as any);
+  const removeFile = (index: number) => {
+    onFilesSelect(selectedFiles.filter((_, i) => i !== index));
   };
 
   return (
@@ -91,7 +108,7 @@ export const FileUpload = ({ onFileSelect, selectedFile }: FileUploadProps) => {
           </p>
         </div>
 
-        {!selectedFile ? (
+        {selectedFiles.length === 0 ? (
           <div
             onDragEnter={handleDragIn}
             onDragLeave={handleDragOut}
@@ -110,6 +127,7 @@ export const FileUpload = ({ onFileSelect, selectedFile }: FileUploadProps) => {
               id="file-upload"
               className="hidden"
               accept=".pdf,.jpg,.jpeg,.png,.txt"
+              multiple
               onChange={handleFileInput}
             />
             <label htmlFor="file-upload" className="cursor-pointer">
@@ -132,20 +150,33 @@ export const FileUpload = ({ onFileSelect, selectedFile }: FileUploadProps) => {
             </label>
           </div>
         ) : (
-          <div className="flex items-center justify-between p-4 bg-accent rounded-lg">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 rounded">
-                <FileText className="w-5 h-5 text-primary" />
+          <div className="space-y-3">
+            {selectedFiles.map((file, index) => (
+              <div key={index} className="flex items-center justify-between p-4 bg-accent rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-primary/10 rounded">
+                    <FileText className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="font-medium">{file.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {(file.size / 1024).toFixed(2)} KB
+                    </p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => removeFile(index)}>
+                  <X className="w-4 h-4" />
+                </Button>
               </div>
-              <div>
-                <p className="font-medium">{selectedFile.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {(selectedFile.size / 1024).toFixed(2)} KB
-                </p>
-              </div>
-            </div>
-            <Button variant="ghost" size="icon" onClick={clearFile}>
-              <X className="w-4 h-4" />
+            ))}
+            
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => document.getElementById('file-upload')?.click()}
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Add More Files
             </Button>
           </div>
         )}

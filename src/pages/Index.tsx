@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
   const [showForm, setShowForm] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [patientData, setPatientData] = useState<PatientData>({
     age: "",
     weight: "",
@@ -29,10 +29,10 @@ const Index = () => {
   };
 
   const handleAnalyze = async () => {
-    if (!selectedFile) {
+    if (selectedFiles.length === 0) {
       toast({
         title: "Missing file",
-        description: "Please upload a medical report first.",
+        description: "Please upload at least one medical report.",
         variant: "destructive",
       });
       return;
@@ -49,42 +49,45 @@ const Index = () => {
 
     setIsAnalyzing(true);
 
-    // TODO: Implement AI analysis with Lovable Cloud
-    // Simulating analysis for now
-    setTimeout(() => {
-      const mockResult = {
-        summary: "Based on the uploaded report, this appears to be a routine blood test showing some elevated white blood cell count, which typically indicates a viral infection in the body.",
-        findings: [
-          "White Blood Cell (WBC) count is slightly elevated at 12,500 cells/µL (normal range: 4,000-11,000)",
-          "All other blood parameters are within normal ranges",
-          "No signs of bacterial infection or serious complications"
-        ],
-        medications: [
-          {
-            name: "Cefixime + Ofloxacin",
-            purpose: "Antibiotic combination to prevent bacterial complications and support recovery"
-          },
-          {
-            name: "Montelukast + Levocetirizine",
-            purpose: "Helps reduce inflammation and allergic symptoms like cough and congestion"
-          },
-          {
-            name: "Mefenamic Acid + Paracetamol",
-            purpose: "Reduces fever and relieves pain or body aches"
-          }
-        ],
-        careAdvice: [
-          "Ensure plenty of fluids throughout the day to help the body fight the infection",
-          "Light, easily digestible meals are recommended",
-          "Adequate rest is important for recovery",
-          "Monitor temperature regularly - contact doctor if fever exceeds 104°F",
-          "Watch for signs of dehydration or extreme lethargy"
-        ],
-        reassurance: "This is a common viral infection that typically resolves within a few days with proper medication and care. There's no need to worry, but do follow the prescribed treatment and monitor for any concerning symptoms."
-      };
+    try {
+      // Convert files to base64 for API transmission
+      const filePromises = selectedFiles.map(async (file) => {
+        return new Promise<{ name: string; type: string; data: string }>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve({
+            name: file.name,
+            type: file.type,
+            data: reader.result as string
+          });
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        });
+      });
 
-      setAnalysisResult(mockResult);
-      setIsAnalyzing(false);
+      const filesData = await Promise.all(filePromises);
+
+      // Call the edge function
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-medical-report`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            patientData,
+            files: filesData,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to analyze report");
+      }
+
+      const result = await response.json();
+      setAnalysisResult(result);
       
       toast({
         title: "Analysis complete",
@@ -95,11 +98,20 @@ const Index = () => {
       setTimeout(() => {
         document.getElementById('results')?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
-    }, 3000);
+    } catch (error) {
+      console.error("Analysis error:", error);
+      toast({
+        title: "Analysis failed",
+        description: error instanceof Error ? error.message : "Failed to analyze the report. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleReset = () => {
-    setSelectedFile(null);
+    setSelectedFiles([]);
     setAnalysisResult(null);
     setPatientData({
       age: "",
@@ -125,8 +137,8 @@ const Index = () => {
             </div>
 
             <FileUpload 
-              selectedFile={selectedFile} 
-              onFileSelect={setSelectedFile}
+              selectedFiles={selectedFiles} 
+              onFilesSelect={setSelectedFiles}
             />
 
             <PatientForm 
