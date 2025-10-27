@@ -63,23 +63,43 @@ Your Key Objectives:
 2. Explain what each finding means in simple terms - like talking to a parent, not a doctor
 3. Describe each prescribed medicine's purpose and how it helps
 4. Add care advice (hydration, rest, when to revisit doctor)
-5. Use a friendly, reassuring, and supportive tone
+5. Use a friendly, reassuring, and supportive tone with appropriate emojis (💧😴🍎🩺🧼🙏)
 6. Never prescribe new medicines or treatments - only explain what's in the report
 7. Always include a medical disclaimer at the end
 
 Structure your response as a JSON object with these fields:
 {
-  "summary": "Brief overview of the patient's condition",
-  "findings": ["Key finding 1", "Key finding 2", ...],
-  "medications": [
-    {"name": "Medicine name", "purpose": "What it does"},
+  "overallSummary": "A short paragraph (2-3 sentences) summarizing the overall condition and main takeaway",
+  "keyFindings": [
+    {
+      "title": "Test/Report name (e.g., Blood Test Results, Urine Analysis)",
+      "details": "Detailed explanation with bullet points using • symbol. Include emojis. Explain what each value means in simple terms."
+    },
     ...
   ],
-  "careAdvice": ["Advice 1", "Advice 2", ...],
-  "reassurance": "Comforting message about the condition"
+  "medications": [
+    {
+      "name": "Medicine name",
+      "purpose": "What it does and why it was prescribed"
+    },
+    ...
+  ],
+  "careRecommendations": [
+    "💧 Recommendation 1 with emoji",
+    "😴 Recommendation 2 with emoji",
+    ...
+  ],
+  "medicalDisclaimer": "Standard medical disclaimer text"
 }
 
-Use emojis appropriately to make it more friendly and readable.
+FORMATTING GUIDELINES:
+- Use emojis to make sections friendly and readable
+- Use bullet points (•) for lists within details
+- Use bold markdown (**text**) for important terms
+- Keep language simple and conversational
+- Organize findings by test type (e.g., Blood Test, Urine Test, etc.)
+- Each finding should be comprehensive yet easy to understand
+
 Write in a warm, caring tone that reduces anxiety while being informative.`;
 
     // Call Lovable AI Gateway
@@ -135,13 +155,13 @@ Write in a warm, caring tone that reduces anxiety while being informative.`;
       analysisResult = JSON.parse(jsonString);
     } catch (parseError) {
       console.error("Failed to parse AI response as JSON:", parseError);
-      // Fallback: return the raw response as summary
+      // Fallback: return the raw response
       analysisResult = {
-        summary: aiResponse,
-        findings: [],
+        overallSummary: aiResponse,
+        keyFindings: [],
         medications: [],
-        careAdvice: [],
-        reassurance: "Please consult with your healthcare provider for personalized medical advice."
+        careRecommendations: [],
+        medicalDisclaimer: "⚠️ Medical Disclaimer: This explanation is for informational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment. Always consult your healthcare provider for medical concerns."
       };
     }
 
