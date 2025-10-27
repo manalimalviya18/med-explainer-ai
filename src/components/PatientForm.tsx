@@ -26,9 +26,9 @@ export const PatientForm = ({ data, onChange }: PatientFormProps) => {
     <Card className="p-6">
       <div className="space-y-4">
         <div className="space-y-2">
-          <h3 className="text-lg font-semibold">Patient Information</h3>
+          <h3 className="text-lg font-semibold">Patient Information (Optional)</h3>
           <p className="text-sm text-muted-foreground">
-            Please provide basic details for better personalized explanations
+            Provide details for more personalized explanations
           </p>
         </div>
 

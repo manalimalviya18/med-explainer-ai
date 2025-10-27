@@ -22,16 +22,22 @@ serve(async (req) => {
     console.log("Number of files:", files?.length || 0);
 
     // Build the user message with text and images
+    const patientInfo: string[] = [];
+    if (patientData.age) patientInfo.push(`- Age: ${patientData.age} years`);
+    if (patientData.weight) patientInfo.push(`- Weight: ${patientData.weight} kg`);
+    if (patientData.gender) patientInfo.push(`- Gender: ${patientData.gender}`);
+    
+    const language = patientData.language || "english";
+    
+    let patientInfoText = "";
+    if (patientInfo.length > 0) {
+      patientInfoText = `Patient Information:\n${patientInfo.join('\n')}\n\n`;
+    }
+    
     const messageContent: any[] = [
       {
         type: "text",
-        text: `Patient Information:
-- Age: ${patientData.age} years
-- Weight: ${patientData.weight} kg
-- Gender: ${patientData.gender}
-- Preferred Language: ${patientData.language}
-
-Please analyze the uploaded medical reports and prescriptions. Provide a comprehensive medical explanation in ${patientData.language} language.`
+        text: `${patientInfoText}Please analyze the uploaded medical reports and prescriptions. Provide a comprehensive medical explanation in ${language} language.`
       }
     ];
 
@@ -50,7 +56,7 @@ Please analyze the uploaded medical reports and prescriptions. Provide a compreh
     const systemPrompt = `You are a professional and empathetic medical assistant AI.
 Your task is to analyze medical reports (blood tests, prescriptions, urine tests, etc.) and explain them in clear, simple, non-technical language in the user's preferred language.
 
-IMPORTANT: Respond in ${patientData.language} language ONLY.
+IMPORTANT: Respond in ${language} language ONLY.
 
 Your Key Objectives:
 1. Identify main findings in the report (diagnosis, abnormal values, infection signs, etc.)

@@ -38,14 +38,6 @@ const Index = () => {
       return;
     }
 
-    if (!patientData.age || !patientData.weight || !patientData.gender) {
-      toast({
-        title: "Missing information",
-        description: "Please fill in all patient information fields.",
-        variant: "destructive",
-      });
-      return;
-    }
 
     setIsAnalyzing(true);
 
