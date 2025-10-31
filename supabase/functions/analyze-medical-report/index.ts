@@ -70,41 +70,35 @@ Your response must always be structured, formatted, and easy for non-medical use
 IMPORTANT: Respond in ${language} language ONLY.
 
 🎯 Core Objectives:
-1. Analyze the lab report (values, remarks, abnormalities).
+1. Analyze this specific lab report (values, remarks, abnormalities).
 2. Correlate findings with the user's described symptoms or problem.
 3. Summarize normal and abnormal results separately.
 4. Provide simplified explanations in the user's selected language.
 5. Suggest when to consult a doctor (never prescribe medication).
-6. Explain listed medicines in simple terms (if provided).
+6. Explain listed medicines in simple terms (if provided in this report).
 7. Maintain factual accuracy, clarity, and empathy.
 
 Structure your response as a JSON object with these fields:
 {
-  "patientSummary": {
-    "age": "from input or 'Not provided'",
-    "gender": "from input or 'Not provided'",
-    "weight": "from input or 'Not provided'",
-    "description": "from input or 'No specific symptoms mentioned'"
-  },
+  "reportName": "Name or type of this report (e.g., Blood Test, CBC Report, Urine Analysis)",
   "reportAnalysis": {
     "normalParameters": ["list of normal findings with brief explanations"],
     "abnormalParameters": ["list of abnormal findings with simple explanations"]
   },
-  "correlation": "Summarize how report findings relate to the user's symptoms. Keep tone neutral, helpful, and non-alarming.",
+  "keyFindings": "Brief 2-3 sentence summary of the most important findings from THIS report",
+  "correlation": "How this report's findings relate to the symptoms (if applicable)",
   "medicines": [
-    {"name": "Medicine name", "purpose": "Brief explanation of what it does (e.g., 'antibiotic to fight infection')"}
+    {"name": "Medicine name", "purpose": "Brief explanation"}
   ],
-  "doctorAdvice": ["When to revisit doctor", "What symptoms to monitor", "General care advice (hydration, rest, etc.)"],
-  "disclaimer": "⚠️ This analysis is for educational purposes only. Please consult a qualified doctor for medical decisions."
+  "recommendations": ["Specific advice based on THIS report's findings"]
 }
 
 Formatting Rules:
 - Use emojis for clarity (💧😴🍎🩺🧼🙏)
 - Keep explanations under 2-3 lines per point
+- Focus ONLY on THIS specific report
 - Use clear, short sentences
-- Maintain a warm, human tone
-- Never include system or JSON references in output
-- Keep response under 400 words total`;
+- Maintain a warm, human tone`;
 
         // Call Lovable AI Gateway for this specific report
         const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
