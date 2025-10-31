@@ -14,7 +14,8 @@ const Index = () => {
     age: "",
     weight: "",
     gender: "",
-    language: "english"
+    language: "english",
+    description: ""
   });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
@@ -109,7 +110,8 @@ const Index = () => {
       age: "",
       weight: "",
       gender: "",
-      language: "english"
+      language: "english",
+      description: ""
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };

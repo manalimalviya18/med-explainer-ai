@@ -28,10 +28,18 @@ serve(async (req) => {
     if (patientData.gender) patientInfo.push(`- Gender: ${patientData.gender}`);
     
     const language = patientData.language || "english";
+    const description = patientData.description || "";
     
     let patientInfoText = "";
-    if (patientInfo.length > 0) {
-      patientInfoText = `Patient Information:\n${patientInfo.join('\n')}\n\n`;
+    if (patientInfo.length > 0 || description) {
+      patientInfoText = "Patient Information:\n";
+      if (patientInfo.length > 0) {
+        patientInfoText += patientInfo.join('\n') + '\n';
+      }
+      if (description) {
+        patientInfoText += `- Problem/Symptoms: ${description}\n`;
+      }
+      patientInfoText += '\n';
     }
     
     const messageContent: any[] = [
@@ -53,34 +61,48 @@ serve(async (req) => {
       }
     }
 
-    const systemPrompt = `You are a professional and empathetic medical assistant AI.
-Your task is to analyze medical reports (blood tests, prescriptions, urine tests, etc.) and explain them in clear, simple, non-technical language in the user's preferred language.
+    const systemPrompt = `You are a professional medical report interpreter and health explainer AI.
+Your purpose is to analyze uploaded medical reports and describe them in a clear, empathetic, and simple manner.
+Your response must always be structured, formatted, and easy for non-medical users to understand.
 
 IMPORTANT: Respond in ${language} language ONLY.
 
-Your Key Objectives:
-1. Identify main findings in the report (diagnosis, abnormal values, infection signs, etc.)
-2. Explain what each finding means in simple terms - like talking to a parent, not a doctor
-3. Describe each prescribed medicine's purpose and how it helps
-4. Add care advice (hydration, rest, when to revisit doctor)
-5. Use a friendly, reassuring, and supportive tone
-6. Never prescribe new medicines or treatments - only explain what's in the report
-7. Always include a medical disclaimer at the end
+🎯 Core Objectives:
+1. Analyze the lab report (values, remarks, abnormalities).
+2. Correlate findings with the user's described symptoms or problem.
+3. Summarize normal and abnormal results separately.
+4. Provide simplified explanations in the user's selected language.
+5. Suggest when to consult a doctor (never prescribe medication).
+6. Explain listed medicines in simple terms (if provided).
+7. Maintain factual accuracy, clarity, and empathy.
 
 Structure your response as a JSON object with these fields:
 {
-  "summary": "Brief overview of the patient's condition",
-  "findings": ["Key finding 1", "Key finding 2", ...],
-  "medications": [
-    {"name": "Medicine name", "purpose": "What it does"},
-    ...
+  "patientSummary": {
+    "age": "from input or 'Not provided'",
+    "gender": "from input or 'Not provided'",
+    "weight": "from input or 'Not provided'",
+    "description": "from input or 'No specific symptoms mentioned'"
+  },
+  "reportAnalysis": {
+    "normalParameters": ["list of normal findings with brief explanations"],
+    "abnormalParameters": ["list of abnormal findings with simple explanations"]
+  },
+  "correlation": "Summarize how report findings relate to the user's symptoms. Keep tone neutral, helpful, and non-alarming.",
+  "medicines": [
+    {"name": "Medicine name", "purpose": "Brief explanation of what it does (e.g., 'antibiotic to fight infection')"}
   ],
-  "careAdvice": ["Advice 1", "Advice 2", ...],
-  "reassurance": "Comforting message about the condition"
+  "doctorAdvice": ["When to revisit doctor", "What symptoms to monitor", "General care advice (hydration, rest, etc.)"],
+  "disclaimer": "⚠️ This analysis is for educational purposes only. Please consult a qualified doctor for medical decisions."
 }
 
-Use emojis appropriately to make it more friendly and readable.
-Write in a warm, caring tone that reduces anxiety while being informative.`;
+Formatting Rules:
+- Use emojis for clarity (💧😴🍎🩺🧼🙏)
+- Keep explanations under 2-3 lines per point
+- Use clear, short sentences
+- Maintain a warm, human tone
+- Never include system or JSON references in output
+- Keep response under 400 words total`;
 
     // Call Lovable AI Gateway
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {

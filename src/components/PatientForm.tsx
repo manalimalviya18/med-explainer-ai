@@ -3,13 +3,15 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { User, Weight, Calendar, Languages } from "lucide-react";
+import { User, Weight, Calendar, Languages, FileText } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 
 export interface PatientData {
   age: string;
   weight: string;
   gender: string;
   language: string;
+  description: string;
 }
 
 interface PatientFormProps {
@@ -102,6 +104,20 @@ export const PatientForm = ({ data, onChange }: PatientFormProps) => {
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="description" className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary" />
+            Symptoms / Health Problem (Optional)
+          </Label>
+          <Textarea
+            id="description"
+            placeholder="e.g., Child has viral fever for 3 days, temperature up to 103.5°F at night"
+            value={data.description}
+            onChange={(e) => handleChange('description', e.target.value)}
+            rows={3}
+          />
         </div>
       </div>
     </Card>
