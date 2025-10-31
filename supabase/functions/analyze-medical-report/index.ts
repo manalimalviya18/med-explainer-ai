@@ -155,15 +155,29 @@ Formatting Rules:
                        aiResponse.match(/```\n([\s\S]*?)\n```/);
       const jsonString = jsonMatch ? jsonMatch[1] : aiResponse;
       analysisResult = JSON.parse(jsonString);
+      
+      // Log the parsed result for debugging
+      console.log("Successfully parsed AI response");
     } catch (parseError) {
       console.error("Failed to parse AI response as JSON:", parseError);
-      // Fallback: return the raw response as summary
+      console.error("Raw AI response:", aiResponse);
+      
+      // Fallback: return a properly structured response
       analysisResult = {
-        summary: aiResponse,
-        findings: [],
-        medications: [],
-        careAdvice: [],
-        reassurance: "Please consult with your healthcare provider for personalized medical advice."
+        patientSummary: {
+          age: patientData.age || "Not provided",
+          gender: patientData.gender || "Not provided",
+          weight: patientData.weight || "Not provided",
+          description: patientData.description || "No specific symptoms mentioned"
+        },
+        reportAnalysis: {
+          normalParameters: [],
+          abnormalParameters: ["Unable to parse report automatically. Please review the analysis manually."]
+        },
+        correlation: "Analysis could not be completed. Please consult with your healthcare provider.",
+        medicines: [],
+        doctorAdvice: ["Please consult with your healthcare provider for a detailed explanation of your report."],
+        disclaimer: "⚠️ This analysis is for educational purposes only. Please consult a qualified doctor for medical decisions."
       };
     }
 

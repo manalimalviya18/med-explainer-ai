@@ -29,6 +29,18 @@ interface AnalysisResultProps {
 }
 
 export const AnalysisResult = ({ result }: AnalysisResultProps) => {
+  // Safety check - ensure we have the required data structure
+  if (!result || !result.patientSummary) {
+    return (
+      <Alert className="border-amber-500/50 bg-amber-50 dark:bg-amber-950/20">
+        <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+        <AlertDescription className="text-sm leading-relaxed ml-2 text-amber-800 dark:text-amber-300">
+          Unable to display analysis results. Please try analyzing the report again.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
@@ -42,28 +54,30 @@ export const AnalysisResult = ({ result }: AnalysisResultProps) => {
       <Separator />
 
       {/* Patient Summary */}
-      <Card className="p-6 bg-gradient-to-br from-accent/30 to-background border-primary/20">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 mb-4">
-            <User className="w-5 h-5 text-primary" />
-            <h3 className="text-lg font-semibold">👶 Patient Details</h3>
+      {result.patientSummary && (
+        <Card className="p-6 bg-gradient-to-br from-accent/30 to-background border-primary/20">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-4">
+              <User className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-semibold">👶 Patient Details</h3>
+            </div>
+            <div className="space-y-2 text-sm">
+              {result.patientSummary.age && result.patientSummary.age !== "Not provided" && (
+                <p><strong>Age:</strong> {result.patientSummary.age}</p>
+              )}
+              {result.patientSummary.gender && result.patientSummary.gender !== "Not provided" && (
+                <p><strong>Gender:</strong> {result.patientSummary.gender}</p>
+              )}
+              {result.patientSummary.weight && result.patientSummary.weight !== "Not provided" && (
+                <p><strong>Weight:</strong> {result.patientSummary.weight}</p>
+              )}
+              {result.patientSummary.description && result.patientSummary.description !== "No specific symptoms mentioned" && (
+                <p><strong>Problem/Description:</strong> {result.patientSummary.description}</p>
+              )}
+            </div>
           </div>
-          <div className="space-y-2 text-sm">
-            {result.patientSummary.age !== "Not provided" && (
-              <p><strong>Age:</strong> {result.patientSummary.age}</p>
-            )}
-            {result.patientSummary.gender !== "Not provided" && (
-              <p><strong>Gender:</strong> {result.patientSummary.gender}</p>
-            )}
-            {result.patientSummary.weight !== "Not provided" && (
-              <p><strong>Weight:</strong> {result.patientSummary.weight}</p>
-            )}
-            {result.patientSummary.description !== "No specific symptoms mentioned" && (
-              <p><strong>Problem/Description:</strong> {result.patientSummary.description}</p>
-            )}
-          </div>
-        </div>
-      </Card>
+        </Card>
+      )}
 
       {/* Report Analysis - Accordion */}
       <Accordion type="multiple" defaultValue={["analysis", "medicines", "advice"]} className="space-y-4">
