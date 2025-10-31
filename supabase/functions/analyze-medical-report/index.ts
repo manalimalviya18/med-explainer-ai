@@ -21,14 +21,14 @@ serve(async (req) => {
     console.log("Analyzing medical report for patient:", patientData);
     console.log("Number of files:", files?.length || 0);
 
-    // Build the user message with text and images
+    const language = patientData.language || "english";
+    const description = patientData.description || "";
+
+    // Build patient info once for all reports
     const patientInfo: string[] = [];
     if (patientData.age) patientInfo.push(`- Age: ${patientData.age} years`);
     if (patientData.weight) patientInfo.push(`- Weight: ${patientData.weight} kg`);
     if (patientData.gender) patientInfo.push(`- Gender: ${patientData.gender}`);
-    
-    const language = patientData.language || "english";
-    const description = patientData.description || "";
     
     let patientInfoText = "";
     if (patientInfo.length > 0 || description) {
@@ -41,25 +41,27 @@ serve(async (req) => {
       }
       patientInfoText += '\n';
     }
-    
-    const messageContent: any[] = [
-      {
-        type: "text",
-        text: `${patientInfoText}Please analyze the uploaded medical reports and prescriptions. Provide a comprehensive medical explanation in ${language} language.`
-      }
-    ];
 
-    // Add all uploaded files as images
+    // Analyze each report separately
+    const analysisResults = [];
+    
     if (files && files.length > 0) {
-      for (const file of files) {
-        messageContent.push({
-          type: "image_url",
-          image_url: {
-            url: file.data // base64 data URL
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        console.log(`Analyzing report ${i + 1}/${files.length}: ${file.name}`);
+
+        const messageContent: any[] = [
+          {
+            type: "text",
+            text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}\n\nPlease analyze this specific medical report and provide a comprehensive medical explanation in ${language} language.`
+          },
+          {
+            type: "image_url",
+            image_url: {
+              url: file.data
+            }
           }
-        });
-      }
-    }
+        ];
 
     const systemPrompt = `You are a professional medical report interpreter and health explainer AI.
 Your purpose is to analyze uploaded medical reports and describe them in a clear, empathetic, and simple manner.
@@ -104,84 +106,96 @@ Formatting Rules:
 - Never include system or JSON references in output
 - Keep response under 400 words total`;
 
-    // Call Lovable AI Gateway
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
+        // Call Lovable AI Gateway for this specific report
+        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: messageContent }
+            ],
+            temperature: 0.7,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("AI gateway error:", response.status, errorText);
+          
+          if (response.status === 429) {
+            return new Response(
+              JSON.stringify({ error: "Rate limit exceeded. Please try again in a few moments." }),
+              { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          
+          if (response.status === 402) {
+            return new Response(
+              JSON.stringify({ error: "AI credits exhausted. Please add credits to continue." }),
+              { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+
+          throw new Error(`AI gateway error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const aiResponse = data.choices[0].message.content;
+
+        console.log(`AI response received for report ${i + 1}`);
+
+        // Try to parse JSON response for this report
+        let reportResult;
+        try {
+          const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/) || 
+                           aiResponse.match(/```\n([\s\S]*?)\n```/);
+          const jsonString = jsonMatch ? jsonMatch[1] : aiResponse;
+          reportResult = JSON.parse(jsonString);
+          reportResult.fileName = file.name; // Add filename to result
+          console.log(`Successfully parsed AI response for report ${i + 1}`);
+        } catch (parseError) {
+          console.error(`Failed to parse AI response for report ${i + 1}:`, parseError);
+          reportResult = {
+            fileName: file.name,
+            reportName: file.name,
+            reportAnalysis: {
+              normalParameters: [],
+              abnormalParameters: ["Unable to parse this report automatically."]
+            },
+            keyFindings: "Analysis could not be completed for this report.",
+            correlation: "Please consult with your healthcare provider.",
+            medicines: [],
+            recommendations: ["Please consult with your healthcare provider for a detailed explanation."]
+          };
+        }
+        
+        analysisResults.push(reportResult);
+      }
+    }
+
+    // Create comprehensive response with patient info and all reports
+    const finalResponse = {
+      patientSummary: {
+        age: patientData.age || "Not provided",
+        gender: patientData.gender || "Not provided",
+        weight: patientData.weight || "Not provided",
+        description: description || "No specific symptoms mentioned"
       },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: messageContent }
-        ],
-        temperature: 0.7,
-      }),
-    });
+      reports: analysisResults,
+      overallAdvice: [
+        "Keep all reports for future reference",
+        "Consult with your healthcare provider for comprehensive treatment",
+        "Follow prescribed medications and care advice"
+      ],
+      disclaimer: "⚠️ This analysis is for educational purposes only. Please consult a qualified doctor for medical decisions."
+    };
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a few moments." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add credits to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      throw new Error(`AI gateway error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    const aiResponse = data.choices[0].message.content;
-
-    console.log("AI response received");
-
-    // Try to parse JSON response
-    let analysisResult;
-    try {
-      // Extract JSON from markdown code blocks if present
-      const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)\n```/) || 
-                       aiResponse.match(/```\n([\s\S]*?)\n```/);
-      const jsonString = jsonMatch ? jsonMatch[1] : aiResponse;
-      analysisResult = JSON.parse(jsonString);
-      
-      // Log the parsed result for debugging
-      console.log("Successfully parsed AI response");
-    } catch (parseError) {
-      console.error("Failed to parse AI response as JSON:", parseError);
-      console.error("Raw AI response:", aiResponse);
-      
-      // Fallback: return a properly structured response
-      analysisResult = {
-        patientSummary: {
-          age: patientData.age || "Not provided",
-          gender: patientData.gender || "Not provided",
-          weight: patientData.weight || "Not provided",
-          description: patientData.description || "No specific symptoms mentioned"
-        },
-        reportAnalysis: {
-          normalParameters: [],
-          abnormalParameters: ["Unable to parse report automatically. Please review the analysis manually."]
-        },
-        correlation: "Analysis could not be completed. Please consult with your healthcare provider.",
-        medicines: [],
-        doctorAdvice: ["Please consult with your healthcare provider for a detailed explanation of your report."],
-        disclaimer: "⚠️ This analysis is for educational purposes only. Please consult a qualified doctor for medical decisions."
-      };
-    }
-
-    return new Response(JSON.stringify(analysisResult), {
+    return new Response(JSON.stringify(finalResponse), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
