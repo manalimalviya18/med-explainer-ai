@@ -51,41 +51,144 @@ serve(async (req) => {
         console.log(`Analyzing report ${i + 1}/${files.length}: ${file.name}`);
 
         const isImage = typeof file?.type === "string" && file.type.startsWith("image/");
-        if (!isImage) {
-          console.warn(`Unsupported file type for vision analysis: ${file.type || "unknown"} for file ${file.name}`);
+        let messageContent: any[] | null = null;
+
+        if (isImage) {
+          // Image flow (vision)
+          messageContent = [
+            {
+              type: "text",
+              text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}\n\nPlease analyze this specific medical report and provide a comprehensive medical explanation in ${language} language.`
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: file.data
+              }
+            }
+          ];
+        } else if (file?.type === "text/plain") {
+          // Text file flow
+          try {
+            const getBase64 = (dataUrl: string) => {
+              const idx = dataUrl.indexOf(",");
+              return idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl;
+            };
+            const b64 = getBase64(file.data);
+            const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+            const text = new TextDecoder("utf-8").decode(bytes);
+            const trimmed = text.trim().slice(0, 8000);
+
+            if (!trimmed) {
+              console.warn(`Empty TXT content for file ${file.name}`);
+              analysisResults.push({
+                fileName: file.name,
+                reportName: file.name,
+                reportAnalysis: { normalParameters: [], abnormalParameters: [
+                  "No readable text found in the uploaded TXT file."
+                ]},
+                keyFindings: "No content to analyze.",
+                correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
+                medicines: [],
+                recommendations: ["Ensure the TXT contains the report text and try again."]
+              });
+              continue;
+            }
+
+            messageContent = [
+              {
+                type: "text",
+                text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}.\n\nBelow is the report text content. Analyze and explain in ${language}:\n\n${trimmed}`
+              }
+            ];
+          } catch (e) {
+            console.error("Failed to decode TXT file:", e);
+            analysisResults.push({
+              fileName: file.name,
+              reportName: file.name,
+              reportAnalysis: { normalParameters: [], abnormalParameters: [
+                "Failed to read the TXT file."
+              ]},
+              keyFindings: "Analysis could not be completed for this TXT report.",
+              correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
+              medicines: [],
+              recommendations: ["Please re-upload the TXT or paste the text into a TXT file and try again."]
+            });
+            continue;
+          }
+        } else if (file?.type === "application/pdf") {
+          // PDF flow: naive text extraction
+          try {
+            const getBase64 = (dataUrl: string) => {
+              const idx = dataUrl.indexOf(",");
+              return idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl;
+            };
+            const b64 = getBase64(file.data);
+            const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+            // Best-effort text extraction for text-based PDFs
+            const raw = new TextDecoder("latin1").decode(bytes);
+            const asciiMatches = raw.match(/[\x09\x0A\x0D\x20-\x7E]{3,}/g) || [];
+            let extracted = asciiMatches.join("\n");
+            // If too short, likely a scanned PDF
+            if (!extracted || extracted.replace(/\s+/g, '').length < 50) {
+              console.warn(`PDF appears to be image-only (scanned): ${file.name}`);
+              analysisResults.push({
+                fileName: file.name,
+                reportName: file.name,
+                reportAnalysis: { normalParameters: [], abnormalParameters: [
+                  "This PDF looks like a scanned/image-only document and cannot be read as text."
+                ]},
+                keyFindings: "No readable text could be extracted from the PDF.",
+                correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
+                medicines: [],
+                recommendations: [
+                  "Upload clear images (JPG/PNG) of the report pages for best results.",
+                  "Alternatively, upload a text-based PDF."
+                ]
+              });
+              continue;
+            }
+
+            extracted = extracted.slice(0, 12000); // guardrail
+            messageContent = [
+              {
+                type: "text",
+                text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}.\n\nBelow is the extracted text from the PDF. Analyze and explain in ${language}:\n\n${extracted}`
+              }
+            ];
+          } catch (e) {
+            console.error("Failed to process PDF:", e);
+            analysisResults.push({
+              fileName: file.name,
+              reportName: file.name,
+              reportAnalysis: { normalParameters: [], abnormalParameters: [
+                "Unable to process the PDF file."
+              ]},
+              keyFindings: "Analysis could not be completed for this PDF.",
+              correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
+              medicines: [],
+              recommendations: [
+                "If the PDF is scanned, take photos of each page and upload as images.",
+                "If it's text-based, try re-exporting the PDF and upload again."
+              ]
+            });
+            continue;
+          }
+        } else {
+          console.warn(`Unsupported file type: ${file?.type || "unknown"} for file ${file?.name}`);
           analysisResults.push({
             fileName: file.name,
             reportName: file.name,
-            reportAnalysis: {
-              normalParameters: [],
-              abnormalParameters: [
-                "Unsupported file type for image analysis. Please upload a clear image (JPG/PNG). PDFs are not supported yet."
-              ]
-            },
+            reportAnalysis: { normalParameters: [], abnormalParameters: [
+              "Unsupported file type. Please upload PDF, TXT, or clear images (JPG/PNG)."
+            ]},
             keyFindings: "No analysis could be performed for this file type.",
-            correlation: description
-              ? "Based on provided symptoms, please upload an image of the report for tailored analysis."
-              : "Please upload an image of the report for tailored analysis.",
+            correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
             medicines: [],
-            recommendations: [
-              "Take photos or screenshots of the PDF pages and upload them as images."
-            ]
+            recommendations: ["Upload a supported file type and try again."]
           });
           continue;
         }
-
-        const messageContent: any[] = [
-          {
-            type: "text",
-            text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}\n\nPlease analyze this specific medical report and provide a comprehensive medical explanation in ${language} language.`
-          },
-          {
-            type: "image_url",
-            image_url: {
-              url: file.data
-            }
-          }
-        ];
 
     const systemPrompt = `You are a professional medical report interpreter and health explainer AI.
 Your purpose is to analyze uploaded medical reports and describe them in a clear, empathetic, and simple manner.
