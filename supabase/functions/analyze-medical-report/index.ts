@@ -51,14 +51,15 @@ serve(async (req) => {
         console.log(`Analyzing report ${i + 1}/${files.length}: ${file.name}`);
 
         const isImage = typeof file?.type === "string" && file.type.startsWith("image/");
+        const isPDF = file?.type === "application/pdf";
         let messageContent: any[] | null = null;
 
         if (isImage) {
-          // Image flow (vision)
+          // Image flow (vision) - this works well
           messageContent = [
             {
               type: "text",
-              text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}\n\nPlease analyze this specific medical report and provide a comprehensive medical explanation in ${language} language.`
+              text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}\n\nPlease analyze this specific medical report image and provide a comprehensive medical explanation in ${language} language.`
             },
             {
               type: "image_url",
@@ -67,125 +68,37 @@ serve(async (req) => {
               }
             }
           ];
-        } else if (file?.type === "text/plain") {
-          // Text file flow
-          try {
-            const getBase64 = (dataUrl: string) => {
-              const idx = dataUrl.indexOf(",");
-              return idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl;
-            };
-            const b64 = getBase64(file.data);
-            const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-            const text = new TextDecoder("utf-8").decode(bytes);
-            const trimmed = text.trim().slice(0, 8000);
-
-            if (!trimmed) {
-              console.warn(`Empty TXT content for file ${file.name}`);
-              analysisResults.push({
-                fileName: file.name,
-                reportName: file.name,
-                reportAnalysis: { normalParameters: [], abnormalParameters: [
-                  "No readable text found in the uploaded TXT file."
-                ]},
-                keyFindings: "No content to analyze.",
-                correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
-                medicines: [],
-                recommendations: ["Ensure the TXT contains the report text and try again."]
-              });
-              continue;
-            }
-
-            messageContent = [
-              {
-                type: "text",
-                text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}.\n\nBelow is the report text content. Analyze and explain in ${language}:\n\n${trimmed}`
-              }
-            ];
-          } catch (e) {
-            console.error("Failed to decode TXT file:", e);
-            analysisResults.push({
-              fileName: file.name,
-              reportName: file.name,
-              reportAnalysis: { normalParameters: [], abnormalParameters: [
-                "Failed to read the TXT file."
-              ]},
-              keyFindings: "Analysis could not be completed for this TXT report.",
-              correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
-              medicines: [],
-              recommendations: ["Please re-upload the TXT or paste the text into a TXT file and try again."]
-            });
-            continue;
-          }
-        } else if (file?.type === "application/pdf") {
-          // PDF flow: naive text extraction
-          try {
-            const getBase64 = (dataUrl: string) => {
-              const idx = dataUrl.indexOf(",");
-              return idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl;
-            };
-            const b64 = getBase64(file.data);
-            const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-            // Best-effort text extraction for text-based PDFs
-            const raw = new TextDecoder("latin1").decode(bytes);
-            const asciiMatches = raw.match(/[\x09\x0A\x0D\x20-\x7E]{3,}/g) || [];
-            let extracted = asciiMatches.join("\n");
-            // If too short, likely a scanned PDF
-            if (!extracted || extracted.replace(/\s+/g, '').length < 50) {
-              console.warn(`PDF appears to be image-only (scanned): ${file.name}`);
-              analysisResults.push({
-                fileName: file.name,
-                reportName: file.name,
-                reportAnalysis: { normalParameters: [], abnormalParameters: [
-                  "This PDF looks like a scanned/image-only document and cannot be read as text."
-                ]},
-                keyFindings: "No readable text could be extracted from the PDF.",
-                correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
-                medicines: [],
-                recommendations: [
-                  "Upload clear images (JPG/PNG) of the report pages for best results.",
-                  "Alternatively, upload a text-based PDF."
-                ]
-              });
-              continue;
-            }
-
-            extracted = extracted.slice(0, 12000); // guardrail
-            messageContent = [
-              {
-                type: "text",
-                text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}.\n\nBelow is the extracted text from the PDF. Analyze and explain in ${language}:\n\n${extracted}`
-              }
-            ];
-          } catch (e) {
-            console.error("Failed to process PDF:", e);
-            analysisResults.push({
-              fileName: file.name,
-              reportName: file.name,
-              reportAnalysis: { normalParameters: [], abnormalParameters: [
-                "Unable to process the PDF file."
-              ]},
-              keyFindings: "Analysis could not be completed for this PDF.",
-              correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
-              medicines: [],
-              recommendations: [
-                "If the PDF is scanned, take photos of each page and upload as images.",
-                "If it's text-based, try re-exporting the PDF and upload again."
-              ]
-            });
-            continue;
-          }
+        } else if (isPDF) {
+          // For PDFs, suggest converting to images for better results
+          console.warn(`PDF uploaded: ${file.name} - recommending image conversion`);
+          analysisResults.push({
+            fileName: file.name,
+            reportName: file.name,
+            reportAnalysis: { normalParameters: [], abnormalParameters: [
+              "PDF files cannot be analyzed directly. Please convert to images for best results."
+            ]},
+            keyFindings: "PDF analysis not supported - please upload as images instead.",
+            correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
+            medicines: [],
+            recommendations: [
+              "📸 Take clear photos of each page of the report",
+              "💾 Save them as JPG or PNG images",
+              "📤 Upload the images instead of the PDF for accurate analysis"
+            ]
+          });
+          continue;
         } else {
           console.warn(`Unsupported file type: ${file?.type || "unknown"} for file ${file?.name}`);
           analysisResults.push({
             fileName: file.name,
             reportName: file.name,
             reportAnalysis: { normalParameters: [], abnormalParameters: [
-              "Unsupported file type. Please upload PDF, TXT, or clear images (JPG/PNG)."
+              "Unsupported file type. Please upload clear images (JPG/PNG) only."
             ]},
             keyFindings: "No analysis could be performed for this file type.",
             correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
             medicines: [],
-            recommendations: ["Upload a supported file type and try again."]
+            recommendations: ["Upload images (JPG/PNG) of your medical reports for analysis."]
           });
           continue;
         }
