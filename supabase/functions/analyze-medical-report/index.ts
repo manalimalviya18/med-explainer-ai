@@ -55,7 +55,8 @@ serve(async (req) => {
         let messageContent: any[] | null = null;
 
         if (isImage) {
-          // Image flow (vision) - this works well
+          // Image flow (vision)
+          console.log(`Processing image: ${file.name}`);
           messageContent = [
             {
               type: "text",
@@ -69,36 +70,32 @@ serve(async (req) => {
             }
           ];
         } else if (isPDF) {
-          // For PDFs, suggest converting to images for better results
-          console.warn(`PDF uploaded: ${file.name} - recommending image conversion`);
-          analysisResults.push({
-            fileName: file.name,
-            reportName: file.name,
-            reportAnalysis: { normalParameters: [], abnormalParameters: [
-              "PDF files cannot be analyzed directly. Please convert to images for best results."
-            ]},
-            keyFindings: "PDF analysis not supported - please upload as images instead.",
-            correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
-            medicines: [],
-            recommendations: [
-              "📸 Take clear photos of each page of the report",
-              "💾 Save them as JPG or PNG images",
-              "📤 Upload the images instead of the PDF for accurate analysis"
-            ]
-          });
-          continue;
+          // PDF flow - send directly to vision model
+          console.log(`Processing PDF with vision: ${file.name}`);
+          messageContent = [
+            {
+              type: "text",
+              text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}\n\nPlease analyze this medical report PDF and provide a comprehensive medical explanation in ${language} language.`
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: file.data
+              }
+            }
+          ];
         } else {
           console.warn(`Unsupported file type: ${file?.type || "unknown"} for file ${file?.name}`);
           analysisResults.push({
             fileName: file.name,
             reportName: file.name,
             reportAnalysis: { normalParameters: [], abnormalParameters: [
-              "Unsupported file type. Please upload clear images (JPG/PNG) only."
+              "Unsupported file type. Please upload clear images (JPG/PNG) or PDF files."
             ]},
             keyFindings: "No analysis could be performed for this file type.",
             correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
             medicines: [],
-            recommendations: ["Upload images (JPG/PNG) of your medical reports for analysis."]
+            recommendations: ["Upload images (JPG/PNG) or PDF files of your medical reports for analysis."]
           });
           continue;
         }
