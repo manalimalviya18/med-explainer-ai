@@ -50,6 +50,30 @@ serve(async (req) => {
         const file = files[i];
         console.log(`Analyzing report ${i + 1}/${files.length}: ${file.name}`);
 
+        const isImage = typeof file?.type === "string" && file.type.startsWith("image/");
+        if (!isImage) {
+          console.warn(`Unsupported file type for vision analysis: ${file.type || "unknown"} for file ${file.name}`);
+          analysisResults.push({
+            fileName: file.name,
+            reportName: file.name,
+            reportAnalysis: {
+              normalParameters: [],
+              abnormalParameters: [
+                "Unsupported file type for image analysis. Please upload a clear image (JPG/PNG). PDFs are not supported yet."
+              ]
+            },
+            keyFindings: "No analysis could be performed for this file type.",
+            correlation: description
+              ? "Based on provided symptoms, please upload an image of the report for tailored analysis."
+              : "Please upload an image of the report for tailored analysis.",
+            medicines: [],
+            recommendations: [
+              "Take photos or screenshots of the PDF pages and upload them as images."
+            ]
+          });
+          continue;
+        }
+
         const messageContent: any[] = [
           {
             type: "text",
@@ -135,7 +159,24 @@ Formatting Rules:
             );
           }
 
-          throw new Error(`AI gateway error: ${response.status}`);
+          // Graceful per-file fallback for other errors (e.g., unsupported file content)
+          analysisResults.push({
+            fileName: file.name,
+            reportName: file.name,
+            reportAnalysis: {
+              normalParameters: [],
+              abnormalParameters: [
+                "Unable to analyze this report automatically. " + (response.status === 400
+                  ? "The content could not be processed. If this is a PDF, please upload images instead."
+                  : "Unexpected error occurred.")
+              ]
+            },
+            keyFindings: "Analysis could not be completed for this report.",
+            correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
+            medicines: [],
+            recommendations: ["Upload a clear image (JPG/PNG) of the report and try again."]
+          });
+          continue;
         }
 
         const data = await response.json();
