@@ -70,20 +70,61 @@ serve(async (req) => {
             }
           ];
         } else if (isPDF) {
-          // PDF flow - send directly to vision model
-          console.log(`Processing PDF with vision: ${file.name}`);
-          messageContent = [
-            {
-              type: "text",
-              text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}\n\nPlease analyze this medical report PDF and provide a comprehensive medical explanation in ${language} language.`
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: file.data
-              }
+          // PDF flow: naive text extraction
+          try {
+            const getBase64 = (dataUrl: string) => {
+              const idx = dataUrl.indexOf(",");
+              return idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl;
+            };
+            const b64 = getBase64(file.data);
+            const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+            const raw = new TextDecoder("latin1").decode(bytes);
+            const asciiMatches = raw.match(/[\x09\x0A\x0D\x20-\x7E]{3,}/g) || [];
+            let extracted = asciiMatches.join("\n");
+            if (!extracted || extracted.replace(/\s+/g, '').length < 50) {
+              console.warn(`PDF appears to be image-only (scanned): ${file.name}`);
+              analysisResults.push({
+                fileName: file.name,
+                reportName: file.name,
+                reportAnalysis: { normalParameters: [], abnormalParameters: [
+                  "This PDF looks like a scanned/image-only document and cannot be read as text."
+                ]},
+                keyFindings: "No readable text could be extracted from the PDF.",
+                correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
+                medicines: [],
+                recommendations: [
+                  "Upload clear images (JPG/PNG) of the report pages for best results.",
+                  "Alternatively, upload a text-based PDF."
+                ]
+              });
+              continue;
             }
-          ];
+
+            extracted = extracted.slice(0, 12000);
+            messageContent = [
+              {
+                type: "text",
+                text: `${patientInfoText}This is report ${i + 1} of ${files.length}. Report name: ${file.name}.\n\nBelow is the extracted text from the PDF. Analyze and explain in ${language}:\n\n${extracted}`
+              }
+            ];
+          } catch (e) {
+            console.error("Failed to process PDF:", e);
+            analysisResults.push({
+              fileName: file.name,
+              reportName: file.name,
+              reportAnalysis: { normalParameters: [], abnormalParameters: [
+                "Unable to process the PDF file."
+              ]},
+              keyFindings: "Analysis could not be completed for this PDF.",
+              correlation: description ? `Reported symptoms: ${description}` : "No symptoms provided.",
+              medicines: [],
+              recommendations: [
+                "If the PDF is scanned, take photos of each page and upload as images.",
+                "If it's text-based, try re-exporting the PDF and upload again."
+              ]
+            });
+            continue;
+          }
         } else {
           console.warn(`Unsupported file type: ${file?.type || "unknown"} for file ${file?.name}`);
           analysisResults.push({
